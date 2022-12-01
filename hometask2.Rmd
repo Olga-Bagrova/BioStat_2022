@@ -1,0 +1,705 @@
+---
+title: "hometask2"
+author: "Багрова Ольга"
+date: '2022-11-16'
+output:
+  html_document:
+    keep_md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(plotly)
+library(corrplot)
+library(corrr)
+library(factoextra)
+library(pheatmap)
+library(FactoMineR)
+library(ggbiplot)
+```
+
+
+
+
+# Задание 1
+
+
+Загрузим датасет:
+```{r}
+insur <- read.csv("insurance_cost.csv")
+head(insur)
+```
+
+Это данные по базовым показателям здоровья индивида и сумме, которую страховая компания заплатила за его лечение в год. 
+
+
+Вспомним немного описание данных:
+```{r}
+skimr::skim(insur)
+```
+
+Нулевых значений в возрасте, ИМТ и выплатах нет. Чистить не нужно.
+
+
+
+
+# Задание 2
+
+
+Сделаем интерактивный график отношения ИМТ и затрат на страховку:
+```{r}
+plot_ly(data = insur,
+  x = ~ bmi,
+  y = ~ charges,
+  type = "scatter",
+  mode = 'markers',#без этой строки у меня не работает интерактив
+  color = ~ smoker,
+  colors = "Set2"#и без указания палетки тоже не сработало бы
+)
+```
+
+
+
+
+# Задание 3
+
+
+То же через ggplotly:
+```{r}
+plot <- insur %>%
+  ggplot(aes(x=bmi, y=charges, color = smoker)) + 
+  geom_point() +
+  theme_dark()
+ggplotly(plot)
+```
+
+
+
+
+# Задание 4
+
+Корреляционный анализ
+
+
+## Как было на занятии
+
+Сначала матрицу строим:
+```{r message=FALSE, warning=FALSE}
+insur_num <- insur %>%
+  select(is.integer | is.numeric)
+#head(insur_num)
+
+insur_cor <- cor(insur_num)
+insur_cor
+```
+
+
+И нарисуем:
+```{r}
+corrplot(insur_cor, method = 'number')
+```
+
+
+## Новый тип графика 1
+
+из пакета corpplot:
+
+```{r}
+corrplot(insur_cor,
+         order = "alphabet",
+         cl.pos = 'b',
+         tl.pos = 'd',
+         col = COL1('Blues'),
+         diag = FALSE)
+```
+
+
+Для себя описание параметров:
+order = "AOE" - порядок, в котором выводят названия переменных (в алфавитном)
+
+cl.pos = 'b' - определяет положение цветной шкалы (сейчас снизу).
+
+tl.pos = 'd' - определяет положение текстовых надписей переменных (по диагонали)
+
+col = COL1('Blues') - настройка палитры графика:
+
+COL1() - для визуализации неотрицательной или неположительной матрицы.
+
+COL2() - для визуализации матрицы, элементы которой частично положительные, а частично отрицательные.
+
+Цветовые палитры у них отличаются и не работают, если указана неверная.
+
+diag = FALSE - нужно ли обозначать корреляцию на ячейках по диагонали, в данном случае работает и без этого т.к. там у нас текст, но в ином случае можно выбрать показывать или нет. 
+
+
+Для себя оставлю [ссылку](https://cran.r-project.org/web/packages/corrplot/vignettes/corrplot-intro.html) 
+
+
+## Новый тип графика 2
+
+из пакета corrr:
+
+```{r}
+insur_cor%>%
+  rplot(print_cor = TRUE, colors = c("cyan", "blue"), legend = TRUE)
+```
+
+
+Выглядит плохо, но хотелось посмотреть corrr.
+
+
+
+
+# Задание 5
+
+
+Создадим новый датафрейм (номинативные в дамми/бинарные):
+```{r eval=FALSE, include=FALSE}
+#было неправильно, т.к. для пола и смокеров даммиес не 0 и 1, а смокер_0 и смокер_1
+insur_wD <- insur %>%
+  mutate(sexD = ifelse(sex == 'male', 1, 0))
+
+insur_wD$smokerD <- ifelse(insur_wD$smoker == 'yes', 1, 0)#просто оставляю разные способы как делать (больше для себя)
+
+library('fastDummies')    
+insur_wD <- dummy_cols(insur_wD, select_columns = 'region') 
+#хотя можно и через mutate с case_when
+
+insur_wD <- insur_wD %>%
+  select(is.numeric)
+
+head(insur_wD)
+```
+
+```{r warning=FALSE}
+library('fastDummies')    
+insur_wD <- dummy_cols(insur, select_columns = c('sex', 'smoker', 'region')) 
+#хотя можно и через mutate с case_when
+
+insur_wD <- insur_wD %>%
+  select(is.numeric)
+
+head(insur_wD)
+```
+
+
+
+
+# Задание 6
+
+Иерархическая кластеризация
+
+
+Отшкалируем данные:
+```{r}
+insur_sc <- scale(insur_wD)
+head(insur_sc)
+```
+
+
+Сначала создади матрицу дистанций:
+```{r include=FALSE}
+insur_dist <- dist(insur_sc, method = "euclidean")
+#as.matrix(insur_dist) [1:1338,1:1338]#точно такие значения?
+as.matrix(insur_dist)
+```
+
+
+Расчёт дендрограммы кластеров:
+```{r}
+insur_hc <- hclust(d = insur_dist,
+                   method = "ward.D2")
+```
+
+
+Визуализация:
+```{r warning=FALSE}
+fviz_dend(insur_hc,
+          cex = 0.1)
+```
+
+
+Доп. визуализация матрицы дистанций:
+```{r}
+fviz_dist(insur_dist, gradient = list(low = "blue", mid = "white", high = "red"))
+```
+
+
+
+
+#Задание 7
+
+Раскраска кластеров:
+```{r warning=FALSE}
+insur_sc <- scale(insur_wD)
+
+# Разбиваем на 5 групп дерево
+grp <- cutree(insur_hc, k = 5)
+head(grp, n = 5)#вектор с номерами кластера
+# сколько в каждой группе
+table(grp)
+df<-as.data.frame(insur_sc)
+
+# добавим группы 
+df$grp <- grp
+```
+
+Просто покрашена:
+```{r}
+fviz_dend(insur_hc, k = 5, # Cut in four groups
+cex = 0.5, # label size
+k_colors = c("#2E9FDF", "#00CC33", "#E7B800", "#FC4E07", "#660099"),
+color_labels_by_k = TRUE # color labels by groups
+)
+```
+
+
+Покрашена + границы
+```{r}
+fviz_dend(insur_hc, k = 5, # Cut in four groups
+cex = 0.5, # label size
+k_colors = c("#2E9FDF", "#00CC33", "#E7B800", "#FC4E07", "#660099"),
+color_labels_by_k = TRUE, # color labels by groups
+rect = TRUE, # Add rectangle around groups
+rect_border = "black"
+)
+```
+
+
+Покрашена и закрашена:
+```{r warning=FALSE}
+fviz_dend(insur_hc,  k = 5,
+  rect = TRUE,
+  rect_fill = TRUE,
+  rect_border = "jco",
+  k_colors = "jco",
+  cex = 0.1
+)
+```
+
+
+phylogenic-like tree:
+```{r}
+fviz_dend(insur_hc, k = 5, k_colors = "jco", type = "phylogenic", relep = TRUE , phylo_layout = "layout_as_tree")
+
+```
+
+
+Scatter plot:
+```{r}
+fviz_cluster(list(data = df, cluster = grp)
+            )
+```
+
+
+(видимо из-за переменных даммис кластеры разбиваются, когда строила без них для каждого кластера было одно облачко)
+
+
+
+
+#Задание 8
+
+
+Одновременно heat map и tree map:
+```{r}
+pheatmap(insur_sc, cutree_rows = 6)#с разбиением на подгруппы
+```
+
+
+Можно заметить, что бОльшие значения charges соответствует курящим (оранжевые прямоугольники по charges и оранжевые по smoker_yes)
+
+
+```{r}
+library("d3heatmap")
+
+d3heatmap(insur_sc, colors = "RdYlBu",
+          k_row = 6, # Number of groups in rows
+          k_col = 2 # Number of groups in columns
+          )
+```
+
+
+Должно было быть красиво, но видимо из-за объёма данных не закрасились прямоугольнички, но интерактив работает. Исходный пример:
+```{r}
+d3heatmap(scale(mtcars), colors = "RdYlBu",
+          k_row = 6, # Number of groups in rows
+          k_col = 2 # Number of groups in columns
+          )
+```
+
+
+
+
+#Задание 9
+
+Проведём анализ PCA
+
+```{r}
+insur.pca <- prcomp(insur_wD, scale = T)
+insur.pca$rotation#веса главных компонент
+summary(insur.pca)
+```
+
+```{r eval=FALSE, include=FALSE}
+fviz_pca_ind(insur.pca, geom="point", pointsize = 1)
+```
+
+
+```{r}
+fviz_eig(insur.pca, 
+         addlabels = T, 
+         ylim = c(0, 40))
+```
+
+
+60% (объясняем 2/3 данных) достигается на PC4.
+90% - на PC7.Не очень хорошо.
+
+
+Резко падает прирост % на 9-10 компонентах (было 6,3%, а упало до 1,4%) и если бы надо было уменьшать размерность (количество переменных), то выкинула бы их.
+
+
+
+
+*Анализ компонент* (как каждая переменная влияет на главные компоненты):
+```{r}
+fviz_pca_var(insur.pca, col.var = "contrib")
+```
+
+
+очевидно, что пол Ж/М отрицательно скоррелированы, аналогично (не)курящие. 
+
+
+На первую компоненту (Dim1) влияют (не)курящие и выплаты (по этой оси идёт бОльшая вариация этих признаков). На вторую компоненту (Dim2) - пол. Что касается остальных переменных, то они вносят малый вклад в первые две компоненты. А выплаты скореллированы с курящими. Т.е. в целом сильно выражен эффект от пола и курения.
+
+
+Посмотрим на топ 5 самых важных переменных с т.з. их вариации в PC1 и PC2:
+```{r}
+fviz_pca_var(insur.pca, 
+             select.var = list(contrib = 5),
+             col.var = "contrib")
+```
+
+
+Итого важны пол, отношение к курению, выплаты.
+
+
+Посмотрим из чего состоят 1, 2 и 3 главные компоненты:
+```{r}
+fviz_contrib(insur.pca, choice = "var", axes = 1) # 1
+fviz_contrib(insur.pca, choice = "var", axes = 2) # 2
+fviz_contrib(insur.pca, choice = "var", axes = 3) # 3
+```
+
+
+Как и на диаграмме выше видим, что для самой первой компоненты (PC1) бОльший вклад приходит от курящих (по факту бинарные данные, которые, как мы обсуждали на лекции, сильно влияют на анализ), на вторую компоненту пол, а на третью уже регион, ИМТ.
+
+
+*Сделаем biplot*. Посмотрим, наблюдается ли разница между группами по age:
+```{r}
+library(ggbiplot)
+# Сделаем корректные данные для группировки по age
+insur_w_ch <- insur_wD %>% 
+  mutate(
+    age_group = case_when(
+      age <20 ~ "до 20",
+      age >19 & age < 36 ~ "20-35",
+      age > 35 & age < 51 ~ "36-50",
+      age > 50 ~ "после 50"
+    ))
+
+# Визуализируем с группировкой по возрастным группам (для этого переменную нужно сделать фактором)
+ggbiplot(insur.pca, 
+         scale=0, 
+         groups = as.factor(insur_w_ch$age_group), 
+         ellipse = T,
+         alpha = 0.2) +
+  theme_minimal()
+```
+
+
+Не очень кластеризуются по возрастным группам (до чего, наверно, можно было догадаться по тому, что вектор age невелик), но, если правильно понимаю график, то у мы видим 4 какие-то кластера, которые, по-видимому, кластеризуются на основании какого-то другого параметра.
+
+
+Сделаю доп кластеризацию, по другому параметру, просто чтобы проверить эти 4 облака точек.Судя по их расположению, можно предположить, что стоит поиграть с полом и курением:
+```{r}
+# Сделаем корректные данные для группировки по age и smoker
+insur_w_ch <- insur_wD %>% 
+  mutate(
+    clust_m_s = case_when(
+      (sex_male == 1) & (smoker_yes == 1) ~ "1-1",
+      (sex_male == 1) & (smoker_yes == 0) ~ "1-0",
+      (sex_male == 0) & (smoker_yes == 1) ~ "0-1",
+      (sex_male == 0) & (smoker_yes == 0) ~ "0-0"
+    ))
+
+#сделаем так, что комбинации пола и курения такие: М-курит = 1-1, М-не_курит = 1-0, Ж-курит = 0-1, Ж-не_курит = 0-0
+
+# Визуализируем с такой группировкой
+ggbiplot(insur.pca, 
+         scale=0, 
+         groups = as.factor(insur_w_ch$clust_m_s), 
+         ellipse = T,
+         alpha = 0.2) +
+  theme_minimal()
+```
+
+
+Кластеры выделились согласно облачкам.
+
+
+
+
+#Задание 11
+Видимо, это как раз про то, чего я пыталась добиться выше. Но посмотрю ещё дополнительно
+
+Отдельно по полу:
+```{r}
+insur_w_ch <- insur_wD %>% 
+  mutate(
+    sex = case_when(
+      sex_male == 1 ~ "male",
+      sex_male == 0 ~ "female"
+    ))
+# по факту просто вернулись к исходной переменной пол
+ggbiplot(insur.pca, 
+         scale=0, 
+         groups = as.factor(insur_w_ch$sex), 
+         ellipse = T,
+         alpha = 0.2) +
+  theme_minimal()
+```
+
+
+Разбилось (как раз вдоль направления пола)
+
+
+Отдельно по курению:
+```{r}
+insur_w_ch <- insur_wD %>% 
+  mutate(
+    smoker = case_when(
+      smoker_yes == 1 ~ "male",
+      smoker_yes == 0 ~ "female"
+    ))
+# по факту просто вернулись к исходной переменной smoker
+ggbiplot(insur.pca, 
+         scale=0, 
+         groups = as.factor(insur_w_ch$smoker), 
+         ellipse = T,
+         alpha = 0.2) +
+  theme_minimal()
+```
+
+
+Разбилось по другому направлению.
+
+
+Отдельно по выплатам:
+```{r}
+insur_w_ch <- insur_wD %>% 
+  mutate(
+    charg_group = case_when(
+      charges <=5000 ~ "<= 5K",
+      charges >5000 & charges <= 15000 ~ "5K-15K",
+      charges > 15000 & charges < 50000 ~ "15K-50K",
+      charges > 50000 ~ "после 50"
+    ))
+# по факту просто вернулись к исходной переменной smoker
+ggbiplot(insur.pca, 
+         scale=0, 
+         groups = as.factor(insur_w_ch$charg_group), 
+         ellipse = T,
+         alpha = 0.2) +
+  theme_minimal()
+```
+
+
+Можно было бы взять и 2 градации для выплат, как раз было бы до 0 и после.
+
+
+
+
+#Задание 12
+
+
+Наверно стоит для начала взглянуть по каким переменным самый большой разброс (закоменченные library(psych) и describe. Там по sd идёт charges, age, bmi, children... Попробую удалить те, что с не самым большим разбросом (как раз пол, регион, курение, хотя наверно я много удаляю)
+```{r}
+#смотрю разброс данных
+#library(psych)
+#describe(insur_wD)
+
+insur_v_1 <- insur_wD %>%
+  select( 'age', 'bmi', 'children', 'charges')
+
+#PCA
+insur.pca_1 <- prcomp(insur_v_1, scale = T)
+summary(insur.pca_1)
+#Приходим к тому, что у нас на 2 компоненте достигается 60%, он наверно потому что мы много удалили
+
+fviz_eig(insur.pca_1, 
+         addlabels = T, 
+         ylim = c(0, 40))
+
+fviz_contrib(insur.pca_1, choice = "var", axes = 1) # 1
+fviz_contrib(insur.pca_1, choice = "var", axes = 2) # 2
+fviz_contrib(insur.pca_1, choice = "var", axes = 3) # 3
+
+
+ggbiplot(insur.pca_1, 
+         scale=0) +
+  theme_minimal()
+```
+
+
+Много удалилось данных, поэтому наверно пример не очень.
+
+
+Если не будем ничего удалять, а заменим возраст на даммис
+```{r}
+insur_v_2 <- insur_wD %>% 
+  mutate(
+    age_group = case_when(
+      age <20 ~ "до 20",
+      age >19 & age < 36 ~ "20-35",
+      age > 35 & age < 51 ~ "36-50",
+      age > 50 ~ "после 50"
+    ))
+
+#и делаем их дамми
+insur_v_2 <- dummy_cols(insur_v_2, select_columns = "age_group") 
+insur_v_2$age <- NULL
+insur_v_2$age_group <- NULL
+
+#PCA
+insur.pca_2 <- prcomp(insur_v_2, scale = T)
+summary(insur.pca_2)
+
+fviz_eig(insur.pca_2, 
+         addlabels = T, 
+         ylim = c(0, 40))
+
+fviz_contrib(insur.pca_2, choice = "var", axes = 1) # 1
+fviz_contrib(insur.pca_2, choice = "var", axes = 2) # 2
+fviz_contrib(insur.pca_2, choice = "var", axes = 3) # 3
+
+
+ggbiplot(insur.pca_2, 
+         scale=0) +
+  theme_minimal()
+```
+
+
+Не сильно качество изменило, но наверно потому что изначально возраст не сильно влиял на компоненты.
+
+
+Изначально у нас даммиес-переменные сильно влияют на PCA, попробуем с ними что-то сделать. Просто сделаем бинарными smoker (yes=1, no=0) и sex (male=1, female=0) 
+```{r}
+insur_v_3 <- insur %>%
+  mutate(
+    smoker = if_else(smoker == 'yes', 1, 0),
+    sex = if_else(sex == 'female', 1, 0),
+    )
+
+#и делаем их дамми
+insur_v_3 <- dummy_cols(insur_v_3, select_columns = "region" )
+insur_v_3$region <- NULL
+
+#PCA
+insur.pca_3 <- prcomp(insur_v_3, scale = T)
+summary(insur.pca_3)
+#Приходим к тому, что у нас на 2 компоненте достигается 60%, он наверно потому что мы много удалили
+
+fviz_eig(insur.pca_3, 
+         addlabels = T, 
+         ylim = c(0, 40))
+
+fviz_contrib(insur.pca_3, choice = "var", axes = 1) # 1
+fviz_contrib(insur.pca_3, choice = "var", axes = 2) # 2
+fviz_contrib(insur.pca_3, choice = "var", axes = 3) # 3
+
+
+ggbiplot(insur.pca_3, 
+         scale=0) +
+  theme_minimal()
+```
+
+
+Качество не улучшилось, а похоже стало даже хуже. Хотя мы ничего не изменили сильно, кроме как теперь не отдельные колонки для курящих и некурящих, а в одной колонке 1 и 0. 
+
+
+В Dim1 третий по важности ИМТ(bmi), а в Dim2 он второй - попробуем его сделать дамми в добавок к тому, что делали выше:
+```{r}
+insur_v_4 <- insur %>% 
+  mutate(
+    smoker = if_else(smoker == 'yes', 1, 0),
+    sex = if_else(sex == 'female', 1, 0),
+    bmi_group = case_when(
+      bmi <18.5 ~ "und",
+      bmi >=18.5 & bmi <=24.9 ~ "norm",
+      bmi > 24.9 & bmi <= 29 ~ "over",
+      bmi > 29 ~ "obe"
+    ))
+
+#и делаем их дамми
+insur_v_4 <- dummy_cols(insur_v_4, select_columns = "bmi_group") 
+insur_v_4$bmi <- NULL
+insur_v_4$bmi_group <- NULL
+insur_v_4$region <- NULL
+
+#PCA
+insur.pca_4 <- prcomp(insur_v_4, scale = T)
+summary(insur.pca_4)
+
+fviz_eig(insur.pca_4, 
+         addlabels = T, 
+         ylim = c(0, 40))
+
+fviz_contrib(insur.pca_4, choice = "var", axes = 1) # 1
+fviz_contrib(insur.pca_4, choice = "var", axes = 2) # 2
+fviz_contrib(insur.pca_4, choice = "var", axes = 3) # 3
+
+
+ggbiplot(insur.pca_4, 
+         scale=0) +
+  theme_minimal()
+```
+
+
+Поменялся порядо параметров в Dim1 (теперь ИМТ соответствующий сильному ожирению важен)
+
+
+
+Если просто регионы вырзать
+```{r}
+insur_v_5 <- insur_wD %>%
+  select(!contains("region"))
+
+#PCA
+insur.pca_5 <- prcomp(insur_v_5, scale = T)
+summary(insur.pca_5)
+
+fviz_eig(insur.pca_5, 
+         addlabels = T, 
+         ylim = c(0, 40))
+
+fviz_contrib(insur.pca_5, choice = "var", axes = 1) # 1
+fviz_contrib(insur.pca_5, choice = "var", axes = 2) # 2
+fviz_contrib(insur.pca_5, choice = "var", axes = 3) # 3
+
+
+ggbiplot(insur.pca_5, 
+         scale=0) +
+  theme_minimal()
+
+
+```
+
+
+60% достигается на 3, а 90% на 5ой. Так что вроде как стало лучше
