@@ -1,0 +1,374 @@
+---
+title: "Multiple_comp_DZ"
+author: "Багрова Ольга"
+date: '2023-01-13'
+output:
+  html_document:
+    keep_md: true
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+```
+
+#Данные
+
+
+##Загрузка данных:
+
+```{r}
+#Генеральная совокупность
+soccer_general <- read.csv("soccer.csv", sep=";")[, 2:6] %>% 
+    mutate(Position = as.factor(Position), 
+    Nationality = as.factor(Nationality), 
+    Age = as.numeric(Age), 
+    Height = as.numeric(Height)
+) %>% 
+filter(Nationality %in% c("Spanish", "Italian", "German", "English", "Argentinian")) 
+
+set.seed(1) 
+
+#выборка
+soccer_wrk <- soccer_general[sample(1:nrow(soccer_general), 150), ] %>% 
+    mutate(Nationality = factor(Nationality))
+```
+
+
+Возможные варианты пар для сравнения: 
+*Defender - Forward
+*Defender - Goalkeeper
+*Defender - Midfielder
+*Forward - Goalkeeper
+*Forward - Midfielder
+*Goalkeeper - Midfielder
+
+
+##Генеральная совокупность
+
+Рост в генеральной совокупности:
+
+```{r}
+#найдём сначала все средние 
+mD <- mean(soccer_general[soccer_general$Position == 'Defender', 'Height'])#183
+mF <- mean(soccer_general[soccer_general$Position == 'Forward', 'Height'])#180
+mG <- mean(soccer_general[soccer_general$Position == 'Goalkeeper', 'Height'])#188
+mM <- mean(soccer_general[soccer_general$Position == 'Midfielder', 'Height'])#179
+
+#разницы средних
+difDF <- mD - mF
+difDG <- mD - mG
+difDM <- mD - mM
+difFG <- mF - mG
+difFM <- mF - mM
+difGM <- mG - mM
+
+#посмотрим на разницы
+data.frame(Position=c('Forward', 'Goalkeeper', 'Midfielder'),
+                 Defender=c(difDF, difDG, difDM),
+                 Forward=c('-', difFG, difFM),
+                 Goalkeeper=c('-', '-', difGM))
+
+```
+
+
+
+#Доверительные интервалы
+
+##без поправок
+
+Defender - Forward
+
+```{r}
+test_res <- soccer_wrk %>% 
+  filter(Position == "Defender"|Position == "Forward") %>% 
+  t.test(data=., Height ~ Position)
+
+lower_DF_none <- test_res$conf.int[1]
+upper_DF_none <- test_res$conf.int[2]
+
+test_res
+```
+
+ДИ включает 0, не отвергаем H0 (о равенстве средних); реальную разницу между средним ростом ДИ покрывает.
+
+
+Defender - Goalkeeper
+
+```{r}
+test_res <- soccer_wrk %>% 
+  filter(Position == "Defender"|Position == "Goalkeeper") %>% 
+  t.test(data=., Height ~ Position)
+
+lower_DG_none <- test_res$conf.int[1]
+upper_DG_none <- test_res$conf.int[2]
+
+test_res
+```
+
+ДИ не включает 0, отвергаем H0 (о равенстве средних); реальную разницу между средним ростом ДИ покрывает.
+
+
+Defender - Midfielder
+
+```{r}
+test_res <- soccer_wrk %>% 
+  filter(Position == "Defender"|Position == "Midfielder") %>% 
+  t.test(data=., Height ~ Position)
+
+lower_DM_none <- test_res$conf.int[1]
+upper_DM_none <- test_res$conf.int[2]
+
+test_res
+```
+
+ДИ не включает 0, отвергаем H0 (о равенстве средних); реальную разницу между средним ростом ДИ покрывает.
+
+
+Forward - Goalkeeper
+
+```{r}
+test_res <- soccer_wrk %>% 
+  filter(Position == "Forward"|Position == "Goalkeeper") %>% 
+  t.test(data=., Height ~ Position)
+
+lower_FG_none <- test_res$conf.int[1]
+upper_FG_none <- test_res$conf.int[2]
+
+test_res
+```
+
+ДИ не включает 0, отвергаем H0 (о равенстве средних); реальную разницу между средним ростом ДИ покрывает.
+
+
+Forward - Midfielder
+
+```{r}
+test_res <- soccer_wrk %>% 
+  filter(Position == "Forward"|Position == "Midfielder") %>% 
+  t.test(data=., Height ~ Position)
+
+lower_FM_none <- test_res$conf.int[1]
+upper_FM_none <- test_res$conf.int[2]
+
+test_res
+```
+
+ДИ включает 0, не отвергаем H0 (о равенстве средних); реальную разницу между средним ростом ДИ покрывает.
+
+
+Goalkeeper - Midfielder
+```{r}
+test_res <- soccer_wrk %>% 
+  filter(Position == "Goalkeeper"|Position == "Midfielder") %>% 
+  t.test(data=., Height ~ Position)
+
+lower_GM_none <- test_res$conf.int[1]
+upper_GM_none <- test_res$conf.int[2]
+
+test_res
+```
+
+ДИ не включает 0, отвергаем H0 (о равенстве средних); реальную разницу между средним ростом ДИ покрывает.
+
+
+*Итого здесь*
+
+```{r}
+data.frame(Position=c('Forward', 'Goalkeeper', 'Midfielder'),
+                 Defender=c("H0", "H1", "H1"),
+                 Forward=c('-', "H1", "H0"),
+                 Goalkeeper=c('-', '-', "H1"))
+```
+
+И во всех случаях ДИ покрывают истинную разницу средних.
+
+
+```{r}
+#Соберём всё вместе чтобы потом проще было
+lowers_none <- c(lower_DF_none,lower_DG_none,lower_DM_none,lower_FG_none,lower_FM_none,lower_GM_none)
+uppers_none <- c(upper_DF_none,upper_DG_none,upper_DM_none,upper_FG_none,upper_FM_none,upper_GM_none)
+```
+
+
+##с поправкой Бонферони
+
+Исходно есть уловень значимости = 0,95 (альфа=0,05). В случае поправки Бонферони для 2 групп имеем (альфа*=альфа/n=0,05/2=0,025) уровень значимости = 1-0,025=0,975.
+
+```{r}
+cl = 1-0.05/2
+```
+
+
+Defender - Forward
+
+```{r}
+test_res <- soccer_wrk %>% 
+  filter(Position == "Defender"|Position == "Forward") %>% 
+  t.test(data=., Height ~ Position, conf.level = cl)
+
+lower_DF_bonf <- test_res$conf.int[1]
+upper_DF_bonf <- test_res$conf.int[2]
+
+test_res
+```
+
+ДИ включает 0, не отвергаем H0 (о равенстве средних).
+
+
+Defender - Goalkeeper
+
+```{r}
+test_res <- soccer_wrk %>% 
+  filter(Position == "Defender"|Position == "Goalkeeper") %>% 
+  t.test(data=., Height ~ Position, conf.level = cl)
+
+lower_DG_bonf <- test_res$conf.int[1]
+upper_DG_bonf <- test_res$conf.int[2]
+
+test_res
+```
+
+ДИ не включает 0, отвергаем H0 (о равенстве средних).
+
+
+Defender - Midfielder
+
+```{r}
+test_res <- soccer_wrk %>% 
+  filter(Position == "Defender"|Position == "Midfielder") %>% 
+  t.test(data=., Height ~ Position, conf.level = cl)
+
+lower_DM_bonf <- test_res$conf.int[1]
+upper_DM_bonf <- test_res$conf.int[2]
+
+test_res
+```
+
+ДИ не включает 0, отвергаем H0 (о равенстве средних).
+
+
+Forward - Goalkeeper
+
+```{r}
+test_res <- soccer_wrk %>% 
+  filter(Position == "Forward"|Position == "Goalkeeper") %>% 
+  t.test(data=., Height ~ Position, conf.level = cl)
+
+lower_FG_bonf <- test_res$conf.int[1]
+upper_FG_bonf <- test_res$conf.int[2]
+
+test_res
+```
+
+ДИ не включает 0, отвергаем H0 (о равенстве средних).
+
+
+Forward - Midfielder
+
+```{r}
+test_res <- soccer_wrk %>% 
+  filter(Position == "Forward"|Position == "Midfielder") %>% 
+  t.test(data=., Height ~ Position, conf.level = cl)
+
+lower_FM_bonf <- test_res$conf.int[1]
+upper_FM_bonf <- test_res$conf.int[2]
+
+test_res
+```
+
+ДИ включает 0, не отвергаем H0 (о равенстве средних).
+
+
+Goalkeeper - Midfielder
+```{r}
+test_res <- soccer_wrk %>% 
+  filter(Position == "Goalkeeper"|Position == "Midfielder") %>% 
+  t.test(data=., Height ~ Position, conf.level = cl)
+
+lower_GM_bonf <- test_res$conf.int[1]
+upper_GM_bonf <- test_res$conf.int[2]
+
+test_res
+```
+
+ДИ не включает 0, отвергаем H0 (о равенстве средних).
+
+
+*Итого здесь*
+
+```{r}
+data.frame(Position=c('Forward', 'Goalkeeper', 'Midfielder'),
+                 Defender=c("H0", "H1", "H1"),
+                 Forward=c('-', "H1", "H0"),
+                 Goalkeeper=c('-', '-', "H1"))
+```
+
+И во всех случаях ДИ покрывают истинную разницу средних.
+
+```{r}
+#Соберём всё вместе чтобы потом проще было
+lowers_bonf <- c(lower_DF_bonf,lower_DG_bonf,lower_DM_bonf,lower_FG_bonf,lower_FM_bonf,lower_GM_bonf)
+uppers_bonf <- c(upper_DF_bonf,upper_DG_bonf,upper_DM_bonf,upper_FG_bonf,upper_FM_bonf,upper_GM_bonf)
+```
+
+
+##Результат
+```{r}
+df <- data.frame(delta_height = c(difDF, difDG, difDM, difFG, difFM, difGM),
+                         pair = c("D-F", "D-G", "D-M", "F-G", "F-M", "G-M"),
+                         lower_none = lowers_none,
+                         upper_none = uppers_none,
+                         lower_bonf = lowers_bonf,
+                         upper_bonf = uppers_bonf)
+
+ggplot(df, aes(x=delta_height, y=pair)) +
+  geom_point() +
+  geom_errorbar(aes(xmin = lower_none, xmax = upper_none))+
+  geom_errorbar(aes(xmin = lower_bonf, xmax = upper_bonf), color='blue')+
+  geom_vline(xintercept=0, color="red", linetype=2)
+```
+
+Видим, что в случае поправки ДИ становится длинее (синий цвет). Во всех случаях ДИ покрывают истинную разницу средних значений роста. 0 пересекается ДИ в случаях F-M и D-F (не отвергаем H0).
+
+
+#Попарные t-тесты
+
+##без поправок
+```{r}
+pairwise.t.test(soccer_wrk$Height, soccer_wrk$Position, pool.sd = FALSE, p.adjust.method = "none")
+```
+
+
+##поправка Холма
+```{r}
+pairwise.t.test(soccer_wrk$Height, soccer_wrk$Position, pool.sd = FALSE, p.adjust.method = "holm")
+```
+
+
+##с поправкой Бенджамини-Хохберга
+```{r}
+pairwise.t.test(soccer_wrk$Height, soccer_wrk$Position, pool.sd = FALSE, p.adjust.method = "BH")
+```
+
+
+##Результат
+
+На основании тестов: p<0.05 у 4 случаев (Defender-Goalkeeper, Defender-Midfielder, Forward-Goalkeeper, Goalkeeper-Midfielder), т.е. в их случае отвергаем нулевую гипотезу (о равенстве средних в обеих группах) согласно тесту. (аналогичный результат в ДИ)
+
+
+```{r}
+data.frame(Position=c('Forward', 'Goalkeeper', 'Midfielder'),
+                 Defender=c("H0", "H1", "H1"),
+                 Forward=c('-', "H1", "H0"),
+                 Goalkeeper=c('-', '-', "H1"))
+```
+
+
+*Открытий = 4. Ложных = 0.* (изначально разница в росте не равна 0, как мы предполагаем в рамках гипотезы H0, т.е. любое открытие является истинным)
