@@ -18,6 +18,7 @@ library(purrr)#расширение apply
 library(tibble)#более приятные датафреймы
 library(tidyverse)
 library(flextable)#для печати таблиц
+library(gtsummary)
 ```
 
 
@@ -94,4 +95,11 @@ data %>%
   border_outer(., part="all")
 ```
 
+
+*Сравнение двух групп*
+```{r}
+data %>%
+  tbl_summary(by = "Группа", missing_text = "Нет данных") %>% 
+  add_p()
+```
 
