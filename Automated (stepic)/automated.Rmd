@@ -1,0 +1,97 @@
+---
+title: "Automated"
+author: "Багрова Ольга"
+date: '2023-01-17'
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r include=FALSE}
+library(readxl)#чтение экселя
+library(dplyr)#манипуляция данным
+library(stringr)#для строковых переменных
+library(tidyr)#для аккуратных данных
+library(purrr)#расширение apply
+library(tibble)#более приятные датафреймы
+library(tidyverse)
+library(flextable)#для печати таблиц
+```
+
+
+```{r}
+#Загрузка
+data<-read_excel("data_excel.xlsx", sheet = "data", na = "NA")
+
+#типы
+data$Группа <- as.factor(data$Группа)
+data$Пол <- as.factor(data$Пол)
+data$`Группа крови` <- as.factor(data$`Группа крови`)
+data2<-as.data.frame(data %>%
+  select(where(is.character))%>%
+  apply(., 2, function(x) sub(',','.', x))%>%
+  apply(., 2, as.numeric))
+data<- data %>%
+  select(!matches("_E\\d{1}"))%>%
+  bind_cols(data2)
+data2 <- NULL
+```
+
+
+```{r}
+statistics <- list(
+      `_Количество субъектов` = ~length(.x),
+      `_Количество (есть данные)` = ~sum(!is.na(.x)),
+      `_Нет данных` = ~sum(is.na(.x)),
+      `_Ср. знач.` = ~ifelse(sum(!is.na(.x)) == 0, "Н/П*", mean(.x, na.rm = TRUE) %>% round(2) %>% as.character()),
+      `_Станд. отклон.` = ~ifelse(sum(!is.na(.x)) < 3, "Н/П*", sd(.x, na.rm = TRUE) %>% round(2) %>% as.character()),
+      `_95% ДИ для среднего` = ~sd(.x, na.rm = TRUE) %>% round(2) %>% as.character(),
+      `_мин. - макс.` = ~ifelse(sum(!is.na(.x)) == 0, "Н/П*", paste0(min(.x, na.rm = TRUE) %>% round(2), " - ", max(.x, na.rm = TRUE) %>% round(2))),
+      `_Медиана` = ~ifelse(sum(!is.na(.x)) == 0, "Н/П*", median(.x, na.rm = TRUE) %>% round(2) %>% as.character()),
+      `_Q1 - Q3` = ~ifelse(sum(!is.na(.x)) == 0, "Н/П*", paste0(quantile(.x, 0.25, na.rm = TRUE) %>% round(2), " - ", quantile(.x, 0.75, na.rm = TRUE) %>% round(2)))
+)
+```
+
+
+
+```{r}
+data %>%
+  select(Группа, where(is.numeric)) %>%
+  group_by(Группа)%>%
+  summarise(across(where(is.numeric), statistics))%>%
+  pivot_longer(!"Группа",
+               values_transform = as.character) %>%
+  separate(name, into = c("Переменная", "Статистика"), sep = "__") %>%
+  rename(`Значение` = value)%>%
+  flextable() %>%
+  flextable::align(j = c(1, 3:4), align = "center", part = 'all') %>%
+  set_caption("Описательные статистики количественных переменных") %>%
+  merge_v(c("Группа", "Переменная"))%>%
+  set_table_properties(layout = "autofit") %>%
+  border_inner()%>%
+  border_outer(., part="all")
+```
+
+
+
+```{r}
+data %>%
+  select(Группа, where(is.factor)) %>%
+  mutate(`Группа крови` = `Группа крови` %>% as.character() %>% replace_na("Нет данных") %>% as.factor()) %>%
+  count(Группа, `Группа крови`) %>%
+  group_by(Группа)%>%
+  mutate(`Процент по группе` = (n / sum(n)) %>% round(4) %>% `*`(100) %>% str_c("%")) %>%
+  ungroup() %>%
+  mutate(`Процент по выборке` = (n / sum(n)) %>% round(4) %>% `*`(100) %>% str_c("%"))%>%
+  flextable() %>%
+  flextable::align(j = c(1, 3:4), align = "center", part = 'all') %>%
+  set_caption("Описательные статистики категориальных переменных") %>%
+  merge_v(c("Группа"))%>%
+  set_table_properties(layout = "autofit")%>%
+  border_inner()%>%
+  border_outer(., part="all")
+```
+
+
