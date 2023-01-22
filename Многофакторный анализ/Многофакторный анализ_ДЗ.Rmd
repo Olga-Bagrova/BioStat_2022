@@ -1,0 +1,255 @@
+---
+title: "Многофакторный анализ"
+author: "Багрова Ольга"
+date: '2023-01-20'
+output:
+  html_document:
+    keep_md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(dplyr)
+library(mvtnorm)
+library(glmnet)
+library(ggplot2)
+```
+
+
+
+#Задача 1
+
+
+**Моделируем выборку креатинина и мочевины.**
+
+```{r}
+#Дано
+mu_k <- 88.5
+sigma_k <- 13.25
+mu_m <- 5.4
+sigma_m <- 1.45
+ro <- 0.6
+#Промежуточные расчёты
+cov_kk <- sigma_k**2
+cov_mm <- sigma_m**2
+cov_km <- ro * sigma_k*sigma_m
+#Формируем выборку
+set.seed(5)
+n=100
+km <- rmvnorm(n, mean = c(mu_k, mu_m), sigma = matrix(c(cov_kk,cov_km,cov_km,cov_mm), nrow = 2, ncol = 2))
+KM <- as.data.frame(km)
+colnames(KM) <- c("creatinine", "urea")
+plot(KM)
+```
+
+
+##a
+
+
+**Модель линейной регрессии креатинина на мочевину.**
+
+
+```{r}
+x <- KM$urea
+y <- KM$creatinine 
+model1 <- lm(y~x)
+summary(model1)
+```
+
+
+Получили модель: $creatinine = 6.5854*urea+53.0011$
+
+
+Из теории: 
+
+$a = \sqrt{(DY/DX)}*cor(X,Y)$
+
+
+```{r}
+model1$coefficients[2]#оценка а
+(var(y)/var(x))**0.5*cor(x,y)#дисперсия * корреляция
+
+```
+
+
+$b=\tilde{Y}-a\tilde{X}$
+
+
+```{r}
+model1$coefficients[1]#оценка b
+mean(y)-6.5854*mean(x)#выборочное среднее
+```
+
+
+*Значения близки.*
+
+
+Посмотрим на модель.
+
+```{r}
+x <- KM$urea
+y <- KM$creatinine 
+
+
+plot(creatinine~urea, KM)
+abline(model1)
+```
+
+
+
+##b
+
+
+**Проверка гипотезы о нормальном распределении остатков модели.**
+
+
+Оценим визуально.
+
+```{r}
+plot(model1)
+hist(model1$residuals, main = "Residual Histogram")
+```
+ 
+ 
+На первом графике (Residuals vs Fitted): красная линия тренда близка к нулю, но по краям отклоняется.
+
+
+На втором графике (Normal Q-Q): большинство точек расположены на диагональной линии. Хотя на краях отклоняются. Следовательно, этот график QQ не является окончательным в отношении нормальности остатков.
+
+
+На гистограмме видно похожее на нормальное распределение, но всё же перекошено.
+
+
+Тест Шапиро-Уилка
+
+```{r}
+shapiro.test(model1$residuals)
+```
+
+*p-value>0.05 (p-value = 0.4578) значит не отвергаем нулевую гипотезу о нормальном распределении остатков.*
+
+
+```{r eval=FALSE, include=FALSE}
+#нашла для себя проверку остатков из коробки
+library("olsrr")
+ols_test_normality(model1)
+```
+
+
+##c
+
+
+**Коэффициент детерминации при добавлении регрессора.**
+
+
+```{r}
+set.seed(98)
+W <- rbinom(n, 6, 0.2)
+model11 <- lm(y~x+W)
+summary(model11)
+```
+
+
+Сравним коэффициенты детерминации.
+
+```{r}
+R2 <- as.data.frame(matrix(c(0.4074, 0.4013, 0.4092, 0.3971 ),ncol=2), row.names = c("Multiple R-squared","Adjusted R-squared"))
+colnames(R2) <- c("Without W", "With W")
+R2
+```
+
+
+Коэффициент детерминации стал больше (как обсуждали на лекции). Модифицированный коэффициент детерминации уменьшился.  
+
+
+
+#Задание 2
+
+
+**lasso-оценка для 6 признаков.**
+
+
+Моделируем выборку с 6 признаками.
+
+```{r}
+n <- 50
+set.seed(2)
+x1 <- rnorm(n, mean =1)
+x2 <- x1*(1+runif(n, min =0, max = 0.1))
+x3 <- x1+x2 + rnorm(n, sd = 0.1)
+x4 <- -x3*(1+runif(n, min =0, max = 0.05))+x2*5
+x5 <- 15*x1+45*x2+runif(n, max = 0.3)
+y <- 2*x1+4*x2+3*x3+7*x4+x5+rnorm(n, sd =1)
+
+model2 <- lm(y~x1+x2+x3+x4+x5)
+
+summary(model2)
+```
+
+
+Каждый из коэффициентов регрессии в отдельности не значимо отличается от 0 (p-value>0.05), но все параметры в совокупности значимо. 
+
+
+lasso-оценка
+
+```{r}
+X <- matrix(c(x1,x2,x3,x4,x5), ncol=5)
+la.model <- glmnet(X, y, family = "gaussian", intercept = F, alpha = 1, lambda=0.2)
+la.model$beta
+```
+
+
+*При лассо-регуляризации с параметром r = 0.2 оценки коэффициентов изменились следующим образом: первый увеличился, второй уменьшился, третий обнулился, четвёртый увеличился, пятый обнулился.*
+
+
+
+
+#Задание 3 
+
+
+**Логистическая регрессия**
+
+
+```{r}
+set.seed(7)
+n=201
+Neu <- rnorm(n, mean = 80, sd=5)
+Ly <- rnorm(n, mean=20, sd=5)
+NLR <- sapply(1:n, function(i) (Neu[i]/Ly[i]))
+Sepsis <- sapply(1:n, function(i) if_else(NLR[i]<3, 0, if_else(NLR[i]>9, 1, (NLR[i]-3)/6)))
+plot(NLR, Sepsis)
+
+df <- data.frame(Neu=Neu, Ly = Ly, NLR=NLR, Sepsis=Sepsis)
+```
+
+
+```{r message=FALSE, warning=FALSE}
+model3 <- glm(Sepsis~Ly+Neu, family="binomial")
+summary(model3)
+
+ggplot(df, aes(x=NLR,y=Sepsis)) +
+  geom_point() +
+  stat_smooth(method = "glm", color="green", se=FALSE, method.args = list(family=binomial))
+
+```
+
+
+```{r}
+new <- data.frame(Neu=90, Ly = 15)
+predict(model3, new, type = "response")
+```
+
+
+Вероятность развития сепсиса при Neu=90 и Ly=15 равна 0,57.
+
+
+Если считать по формуле из задания:
+```{r}
+(90/15-3)/6
+```
+
+*Значения близки.*
