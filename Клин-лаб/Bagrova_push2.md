@@ -46,13 +46,18 @@ data %>% glimpse()
 
 Подправим тип Outcome на факторный.
 
+```r
+data$Outcome <- as.factor(data$Outcome)
+```
 
 
 Заменим нули в столбцах на NA: Glucose, BloodPressure, SkinThickness, Insulin, BMI.
 
 
-
-
+```r
+data <- data %>%
+  mutate_at(c("Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI"), ~na_if(., 0))
+```
 
 
 #1
@@ -63,21 +68,34 @@ data %>% glimpse()
 ```r
 #Добавлен ответ на вопрос у скольких пациентов есть НТГ
 Treshold <- 7.8*18 #из ммоль/л в мг/дл
-as.numeric(nrow(data[data$Glucose <= Treshold, ]))#НТГ есть
+
+data %>%
+  filter(Glucose <= Treshold)%>%
+  nrow(.)#НТГ есть
 ```
 
 ```
-## [1] 576
+## [1] 571
 ```
 
 ```r
-as.numeric(nrow(data[data$Glucose > Treshold, ]))#НТГ нет
+data %>%
+  filter(Glucose > Treshold)%>%
+  nrow(.)#НТГ нет
 ```
 
 ```
 ## [1] 192
 ```
-*У 576 есть и у 197 пациентов нет НТГ.*
+
+```r
+sum(is.na(data$Glucose))
+```
+
+```
+## [1] 5
+```
+*У 571 есть и у 192 пациентов нет НТГ.* (по 5 пациентам нет данных)
 
 #2
 Как выглядит ROC-кривая для предсказания сахарного диабета по переменной, характеризующей уровень гликемии?
@@ -89,7 +107,7 @@ roc(Outcome ~ Glucose, data = data) %>%
   theme_bw()
 ```
 
-![](Bagrova_push2_files/figure-html/unnamed-chunk-7-1.png)<!-- -->
+![](Bagrova_push2_files/figure-html/unnamed-chunk-6-1.png)<!-- -->
 
 #3
 Чему равна площадь под ROC-кривой из вопроса 2?
@@ -105,8 +123,8 @@ roc_curve_G
 ## Call:
 ## roc.formula(formula = Outcome ~ Glucose, data = data)
 ## 
-## Data: Glucose in 500 controls (Outcome 0) < 268 cases (Outcome 1).
-## Area under the curve: 0.7881
+## Data: Glucose in 497 controls (Outcome 0) < 266 cases (Outcome 1).
+## Area under the curve: 0.7928
 ```
 *Площадь под ROC-кривой равна 0.7928.*
 
@@ -125,9 +143,9 @@ roc_curve_G
 ## Call:
 ## roc.formula(formula = Outcome ~ Glucose, data = data, ci = T)
 ## 
-## Data: Glucose in 500 controls (Outcome 0) < 268 cases (Outcome 1).
-## Area under the curve: 0.7881
-## 95% CI: 0.7546-0.8217 (DeLong)
+## Data: Glucose in 497 controls (Outcome 0) < 266 cases (Outcome 1).
+## Area under the curve: 0.7928
+## 95% CI: 0.7599-0.8257 (DeLong)
 ```
 *95% двусторонний ДИ для площади под ROC-кривой из вопроса 2 равен [0.7599;0.8257].*
 
@@ -145,9 +163,9 @@ roc_curve_I
 ## Call:
 ## roc.formula(formula = Outcome ~ Insulin, data = data, ci = T)
 ## 
-## Data: Insulin in 500 controls (Outcome 0) > 268 cases (Outcome 1).
-## Area under the curve: 0.4621
-## 95% CI: 0.4191-0.5051 (DeLong)
+## Data: Insulin in 264 controls (Outcome 0) < 130 cases (Outcome 1).
+## Area under the curve: 0.7316
+## 95% CI: 0.6809-0.7824 (DeLong)
 ```
 
 ```r
@@ -155,7 +173,7 @@ ggroc(roc_curve_I) +
     theme_bw()
 ```
 
-![](Bagrova_push2_files/figure-html/unnamed-chunk-10-1.png)<!-- -->
+![](Bagrova_push2_files/figure-html/unnamed-chunk-9-1.png)<!-- -->
 
 ```r
 roc_curve_I %>% coords(x = "best", best.method = "closest.topleft")
@@ -163,7 +181,7 @@ roc_curve_I %>% coords(x = "best", best.method = "closest.topleft")
 
 ```
 ##   threshold specificity sensitivity
-## 1      14.5       0.528   0.5186567
+## 1       121   0.6212121   0.7846154
 ```
 *Пороговое значение является 121 (специфичность = 0.62; чувствительность = 0.78).* 
 У контролей значение ниже, т.е. повышение инсулина плохо для пациента.
@@ -186,14 +204,14 @@ print(res[order(-res$AUC),])
 ## # A tibble: 8 × 4
 ##   name                       AUC AUC_LCL AUC_UCL
 ##   <chr>                    <dbl>   <dbl>   <dbl>
-## 1 Glucose                  0.788   0.755   0.822
-## 2 BMI                      0.688   0.65    0.725
+## 1 Glucose                  0.793   0.76    0.826
+## 2 Insulin                  0.732   0.681   0.782
 ## 3 Age                      0.687   0.649   0.725
-## 4 Pregnancies              0.62    0.576   0.663
-## 5 DiabetesPedigreeFunction 0.606   0.564   0.648
-## 6 BloodPressure            0.586   0.544   0.629
-## 7 SkinThickness            0.554   0.509   0.598
-## 8 Insulin                  0.462   0.419   0.505
+## 4 BMI                      0.687   0.649   0.725
+## 5 SkinThickness            0.663   0.616   0.709
+## 6 Pregnancies              0.62    0.576   0.663
+## 7 BloodPressure            0.608   0.565   0.65 
+## 8 DiabetesPedigreeFunction 0.606   0.564   0.648
 ```
 *Наибольшей площадью под ROC-кривой обладает уровень гликемии. Поскольку при заболевании сахарным диабетом нарушается усваивание глюкозы, т.е. заболевание и показатель напрямую связаны, то он является успешным диагностическим методом данного заболевания.*
 *Следующим идёт инсулин. Известно, что при сахарном диабете нарушена выработка инсулина или орагнизма чувствительность к нему. Поэтому этот показатель тоже полезен в диагностике заболевания.*

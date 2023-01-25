@@ -42,27 +42,18 @@ data %>% glimpse()
 • Outcome – наличие сахарного диабета (0 – нет, 1 – да);
 
 Подправим тип Outcome на факторный.
-```{r include=FALSE}
+```{r}
 data$Outcome <- as.factor(data$Outcome)
 ```
 
 
 Заменим нули в столбцах на NA: Glucose, BloodPressure, SkinThickness, Insulin, BMI.
 
-```{r eval=FALSE, include=FALSE}
+```{r}
 data <- data %>%
   mutate_at(c("Glucose", "BloodPressure", "SkinThickness", "Insulin", "BMI"), ~na_if(., 0))
 ```
 
-
-```{r eval=FALSE, include=FALSE}
-#СТарый чанк: из-за фильтрации удалилось много пациентов
-data <- data %>%
-  filter(Glucose != 0 &
-           BloodPressure != 0 &
-           SkinThickness != 0 & 
-           Insulin != 0 & BMI != 0)
-```
 
 #1
 У какого количества пациентов из датасета присутствует нарушенная толерантность к глюкозе (НТГ)? Критерий НТГ – это уровень повышение гликемии ≥ 7.8 ммоль/л на 120 минуте теста на толерантность к глюкозе. Сколько в датасете пациентов, у которых нет НТГ?
@@ -71,10 +62,18 @@ data <- data %>%
 ```{r}
 #Добавлен ответ на вопрос у скольких пациентов есть НТГ
 Treshold <- 7.8*18 #из ммоль/л в мг/дл
-as.numeric(nrow(data[data$Glucose <= Treshold, ]))#НТГ есть
-as.numeric(nrow(data[data$Glucose > Treshold, ]))#НТГ нет
+
+data %>%
+  filter(Glucose <= Treshold)%>%
+  nrow(.)#НТГ есть
+
+data %>%
+  filter(Glucose > Treshold)%>%
+  nrow(.)#НТГ нет
+
+sum(is.na(data$Glucose))
 ```
-*У 576 есть и у 197 пациентов нет НТГ.*
+*У 571 есть и у 192 пациентов нет НТГ.* (по 5 пациентам нет данных)
 
 #2
 Как выглядит ROC-кривая для предсказания сахарного диабета по переменной, характеризующей уровень гликемии?
